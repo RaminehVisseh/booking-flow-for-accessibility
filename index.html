@@ -4,8 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Booking Flow Accessibility — Jane</title>
-    <style>*, *::before, *::after { font-family: 'Proxima Nova', -apple-system, BlinkMacSystemFont, sans-serif; }</style>
-    <script type="module" crossorigin src="/booking-flow-for-accessibility/assets/index-BJLHpqXf.js"></script>
+    <style>
+      *, *::before, *::after { font-family: 'Proxima Nova', -apple-system, BlinkMacSystemFont, sans-serif; }
+      /* Visible keyboard focus ring for Day view grid overlays */
+      [data-grid-overlay]:focus-visible {
+        opacity: 1 !important;
+        outline: 3px solid #5bbcbd;
+        outline-offset: -3px;
+        background: rgba(91,188,189,0.12) !important;
+        border-radius: 4px;
+      }
+      /* Visible focus ring for all interactive elements */
+      select:focus,
+      input:focus,
+      textarea:focus,
+      button:focus,
+      [tabindex="0"]:not([data-grid-overlay]):focus {
+        outline: 3px solid #5bbcbd !important;
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+    </style>
+    <script type="module" crossorigin src="/booking-flow-for-accessibility/assets/index-D7VCNWEZ.js"></script>
     <link rel="stylesheet" crossorigin href="/booking-flow-for-accessibility/assets/index-B9OHtQKb.css">
   </head>
   <body>
