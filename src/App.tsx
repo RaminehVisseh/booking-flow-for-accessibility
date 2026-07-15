@@ -2528,16 +2528,152 @@ function CurrentTimeMarker({ hour }: { hour: number }) {
 }
 
 /* ─────────────────────────────────────────────────────────────────
+ *  CUSTOM SELECT — keyboard + screen reader accessible dropdown
+ * ───────────────────────────────────────────────────────────────── */
+
+function CustomSelect({ options, value, onChange, placeholder, ariaLabel, ariaLabelledBy, forwardedRef }: {
+  options: { value: string; label: string }[]
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  ariaLabel?: string
+  ariaLabelledBy?: string
+  forwardedRef?: React.RefObject<HTMLButtonElement>
+}) {
+  const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const ownRef = useRef<HTMLButtonElement>(null)
+  const triggerRef = (forwardedRef ?? ownRef) as React.RefObject<HTMLButtonElement>
+  const listRef = useRef<HTMLUListElement>(null)
+  const selectedLabel = options.find(o => o.value === value)?.label ?? placeholder ?? 'Select...'
+  const listId = useRef(`cs-list-${Math.random().toString(36).slice(2)}`)
+  const activeId = activeIndex >= 0 ? `${listId.current}-opt-${activeIndex}` : undefined
+
+  useEffect(() => {
+    if (open && activeIndex >= 0) {
+      listRef.current?.querySelector<HTMLElement>(`#${listId.current}-opt-${activeIndex}`)?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [open, activeIndex])
+
+  function handleTriggerKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      const idx = options.findIndex(o => o.value === value)
+      setActiveIndex(idx >= 0 ? idx : 0)
+      setOpen(true)
+    }
+  }
+
+  function handleListKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIndex(i => Math.min(i + 1, options.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIndex(i => Math.max(i - 1, 0))
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      if (activeIndex >= 0) { onChange(options[activeIndex].value); setOpen(false); triggerRef.current?.focus() }
+    } else if (e.key === 'Escape' || e.key === 'Tab') {
+      setOpen(false)
+      triggerRef.current?.focus()
+    }
+  }
+
+  useEffect(() => {
+    if (open) { listRef.current?.focus() }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (!listRef.current?.contains(e.target as Node) && !triggerRef.current?.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel ? `${ariaLabel}: ${selectedLabel}` : undefined}
+        aria-labelledby={ariaLabelledBy}
+        aria-controls={listId.current}
+        onKeyDown={handleTriggerKeyDown}
+        onClick={() => {
+          const idx = options.findIndex(o => o.value === value)
+          setActiveIndex(idx >= 0 ? idx : 0)
+          setOpen(o => !o)
+        }}
+        style={{
+          width: '100%', fontSize: 13, padding: '8px 10px', textAlign: 'left',
+          border: '1px solid #c8c8c8', borderRadius: 4, background: 'white',
+          fontFamily: 'inherit', color: value ? '#333' : '#999', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}
+      >
+        <span>{selectedLabel}</span>
+        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+          <path d="M1 1l4 4 4-4" stroke="#666" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+      </button>
+      {open && (
+        <ul
+          ref={listRef}
+          id={listId.current}
+          role="listbox"
+          aria-label={ariaLabel}
+          aria-activedescendant={activeId}
+          tabIndex={-1}
+          onKeyDown={handleListKeyDown}
+          style={{
+            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+            background: 'white', border: '1px solid #c8c8c8', borderRadius: 4,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.12)', margin: '2px 0', padding: 0,
+            listStyle: 'none', maxHeight: 220, overflowY: 'auto',
+          }}
+        >
+          {options.map((opt, i) => (
+            <li
+              key={opt.value}
+              id={`${listId.current}-opt-${i}`}
+              role="option"
+              aria-selected={opt.value === value}
+              onMouseEnter={() => setActiveIndex(i)}
+              onMouseDown={(e) => { e.preventDefault(); onChange(opt.value); setOpen(false); triggerRef.current?.focus() }}
+              style={{
+                padding: '8px 10px', fontSize: 13, cursor: 'pointer',
+                background: i === activeIndex ? '#f0f9f9' : opt.value === value ? '#e8f5f5' : 'white',
+                color: '#333',
+              }}
+            >
+              {opt.label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────
  *  NEW APPOINTMENT SIDE PANEL
  * ───────────────────────────────────────────────────────────────── */
 
 function NewAppointmentPanel({
-  practitioner, time, availableUntil, treatment, setTreatment, patient, setPatient, notes, setNotes,
+  practitioner, time, availableUntil, date, treatment, setTreatment, patient, setPatient, notes, setNotes,
   onClose, onBook, onTimeChange,
 }: {
   practitioner: string
   time: number
   availableUntil?: number
+  date?: Date
   treatment: string
   setTreatment: (v: string) => void
   patient: string
@@ -2557,7 +2693,7 @@ function NewAppointmentPanel({
   const filteredTreatments = TREATMENTS.filter(t => t.duration <= availableDuration)
   const tr = TREATMENTS.find(t => t.id === treatment)
   const endTime = selectedTime + (tr?.duration ?? 0.25)
-  const treatmentRef = useRef<HTMLSelectElement>(null)
+  const treatmentRef = useRef<HTMLButtonElement>(null)
   const [announcement, setAnnouncement] = useState('')
 
   // Insert announcement text after live region is in the DOM, then focus treatment
@@ -2625,23 +2761,48 @@ function NewAppointmentPanel({
         <Heading level={3} style={{ margin: 0, flex: 1 }}>Booking Info</Heading>
       </div>
 
-      <PanelSection title="Treatment" hideTitle>
-        <select
-          ref={treatmentRef}
-          value={treatment}
-          onChange={(e) => setTreatment(e.target.value)}
-          aria-label="Treatment"
+      <PanelSection title="Date" hideTitle>
+        {(() => {
+          const isToday = !date || date.toDateString() === new Date().toDateString()
+          const dateLabel = date
+            ? date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+            : 'Today'
+          return (
+            <button
+              aria-label={`Date: ${dateLabel}`}
+              style={{
+                background: 'none', border: 'none', padding: 0, cursor: 'default',
+                fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
+                color: isToday ? '#E8A33D' : '#333', textAlign: 'left',
+              }}
+            >
+              {isToday ? 'Today' : dateLabel}
+            </button>
+          )
+        })()}
+      </PanelSection>
+
+      <PanelSection title="Staff Member">
+        <button
+          aria-label={`Staff: ${practitioner}`}
           style={{
-            width: '100%', fontSize: 13, padding: '8px 10px',
-            border: '1px solid #c8c8c8', borderRadius: 4, background: 'white',
-            fontFamily: 'inherit', color: treatment ? '#333' : '#999',
+            background: 'none', border: 'none', padding: 0, cursor: 'default',
+            fontFamily: 'inherit', fontSize: 13, color: '#333', textAlign: 'left',
           }}
         >
-          <option value="" disabled>Select a treatment...</option>
-          {filteredTreatments.map(t => (
-            <option key={t.id} value={t.id}>{t.label}</option>
-          ))}
-        </select>
+          {practitioner}
+        </button>
+      </PanelSection>
+
+      <PanelSection title="Treatment" hideTitle>
+        <CustomSelect
+          options={filteredTreatments.map(t => ({ value: t.id, label: t.label }))}
+          value={treatment}
+          onChange={v => { setTreatment(v) }}
+          placeholder="Select a treatment..."
+          ariaLabel="Treatment"
+          forwardedRef={treatmentRef}
+        />
       </PanelSection>
 
       <PanelSection title="Patient" action={<Button>New Patient</Button>}>
@@ -2653,36 +2814,21 @@ function NewAppointmentPanel({
       </PanelSection>
 
       <PanelSection title="Time" hideTitle titleId="panel-time-label">
-        <select
-          value={selectedTime}
-          onChange={e => {
-            setSelectedTime(Number(e.target.value))
-          }}
-          onBlur={e => {
-            onTimeChange?.(Number(e.target.value))
-          }}
-          aria-labelledby="panel-time-label"
-          style={{
-            width: '100%', fontSize: 13, padding: '8px 10px',
-            border: '1px solid #c8c8c8', borderRadius: 4, background: 'white',
-            fontFamily: 'inherit', color: '#333',
-          }}
-        >
-          {timeOptions.map(t => (
-            <option key={t} value={t}>{formatHour(t)}</option>
-          ))}
-        </select>
-        <Text size="sm" style={{ display: 'block', color: '#666', marginTop: 6 }} aria-hidden="true">
-          Mon, Jul 13, 2026 {formatHour(selectedTime)} - {formatHour(endTime)}
-        </Text>
-      </PanelSection>
-
-      <PanelSection title="Staff Member">
-        <Text size="sm" tabIndex={0} aria-label={`Staff: ${practitioner}`}>{practitioner}</Text>
+        <CustomSelect
+          options={timeOptions.map(t => ({ value: String(t), label: formatHour(t) }))}
+          value={String(selectedTime)}
+          onChange={v => { const n = Number(v); setSelectedTime(n); onTimeChange?.(n) }}
+          ariaLabelledBy="panel-time-label"
+        />
+        {date && (
+          <Text size="sm" style={{ display: 'block', color: '#666', marginTop: 6 }} aria-hidden="true">
+            {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} {formatHour(selectedTime)} - {formatHour(endTime)}
+          </Text>
+        )}
       </PanelSection>
 
       <PanelSection title="Resources">
-        <Text size="sm" style={{ color: '#666' }} tabIndex={0} aria-label="Resources: No resources required">No resources required</Text>
+        <button aria-label="Resources: No resources required" style={{ background: 'none', border: 'none', padding: 0, cursor: 'default', fontFamily: 'inherit', fontSize: 13, color: '#666', textAlign: 'left' }}>No resources required</button>
       </PanelSection>
 
       <PanelSection title="Notes" noBorder>
@@ -3315,12 +3461,9 @@ function Exploration4Page() {
           <div style={{ background: 'white', border: '1px solid #e2e2e2', borderRadius: 4, overflow: 'hidden', margin: 14 }}>
 
             {/* Date header — focusable so VoiceOver reads the date before the practitioner */}
-            <div
-              tabIndex={0}
+            <button
               aria-label={formatDay(currentDay)}
-              style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', outline: 'none', borderRadius: 2 }}
-              onFocus={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${TEAL}`}
-              onBlur={e => e.currentTarget.style.boxShadow = ''}
+              style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'default', fontFamily: 'inherit', outlineOffset: '-2px' }}
             >
               <div style={{ color: '#E8A33D', fontWeight: 600, fontSize: 12, lineHeight: 1.2 }}>
                 {dayOffset === 0 ? 'Today' : formatDayShort(currentDay)}
@@ -3328,17 +3471,14 @@ function Exploration4Page() {
               <div style={{ color: '#E8A33D', fontWeight: 600, fontSize: 12 }}>
                 {currentDay.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
               </div>
-            </div>
+            </button>
 
             {/* Practitioner column header — focusable */}
             <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr', borderBottom: '1px solid #e2e2e2' }}>
               <div />
-              <div
-                tabIndex={0}
+              <button
                 aria-label={practitioner}
-                style={{ borderLeft: '1px solid #e2e2e2', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', outline: 'none' }}
-                onFocus={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${TEAL}`}
-                onBlur={e => e.currentTarget.style.boxShadow = ''}
+                style={{ borderLeft: '1px solid #e2e2e2', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', background: 'none', border: 'none', cursor: 'default', fontFamily: 'inherit', textAlign: 'left', outlineOffset: '-2px' }}
               >
                 <div style={{
                   width: 28, height: 28, borderRadius: '50%', background: TEAL,
@@ -3346,7 +3486,7 @@ function Exploration4Page() {
                   fontSize: 11, fontWeight: 700, flexShrink: 0,
                 }}>{ex4Initials(practitioner)}</div>
                 <span style={{ fontSize: 13, color: TEAL, fontWeight: 600 }}>{practitioner}</span>
-              </div>
+              </button>
             </div>
 
             {/* Schedule grid — visual layer aria-hidden, accessible overlays sit on top */}
@@ -3440,12 +3580,11 @@ function Exploration4Page() {
                     const top = (startHour - EX4_HOUR_START) * ROW_HEIGHT
                     const height = (endHour - startHour) * ROW_HEIGHT
                     elements.push(
-                      <div
+                      <button
                         key={`booked-${slot}`}
-                        tabIndex={0}
                         data-grid-overlay
                         aria-label={`${formatHour(startHour)} to ${formatHour(endHour)}, booked: ${appt.patient}, ${appt.treatment}`}
-                        style={{ position: 'absolute', top, left: 0, right: 0, height, opacity: 0, zIndex: 3 }}
+                        style={{ position: 'absolute', top, left: 0, right: 0, height, opacity: 0, zIndex: 3, border: 'none', background: 'none', cursor: 'default', padding: 0 }}
                         onFocus={() => setFocusedRange({ startHour, endHour })}
                         onBlur={() => setFocusedRange(null)}
                       />
@@ -3463,7 +3602,7 @@ function Exploration4Page() {
                         key={`avail-${h}`}
                         data-grid-overlay
                         aria-label={`${formatHour(h)}, available`}
-                        style={{ position: 'absolute', top, left: 0, right: 0, height, opacity: 0, cursor: 'pointer', border: 'none', background: 'none', zIndex: 3 }}
+                        style={{ position: 'absolute', top, left: 2, right: 2, height, background: 'rgba(91,188,189,0.10)', cursor: 'pointer', border: 'none', zIndex: 3, borderRadius: 2 }}
                         onClick={() => handleSlotClick(h)}
                         onFocus={() => setFocusedRange({ startHour: h, endHour: focusEndHour })}
                         onBlur={() => setFocusedRange(null)}
@@ -3484,6 +3623,7 @@ function Exploration4Page() {
           practitioner={practitioner}
           time={bookingHour}
           availableUntil={bookingAvailableUntil ?? undefined}
+          date={currentDay}
           treatment={treatment}
           setTreatment={setTreatment}
           patient={patient}
