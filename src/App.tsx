@@ -3458,7 +3458,7 @@ function Exploration4Page() {
 
         {/* Grid */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <div style={{ background: 'white', border: '1px solid #e2e2e2', borderRadius: 4, overflow: 'hidden', margin: 14 }}>
+          <div style={{ background: 'white', border: '1px solid #e2e2e2', borderRadius: 4, margin: 14 }}>
 
             {/* Date header — focusable so VoiceOver reads the date before the practitioner */}
             <button
